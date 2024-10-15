@@ -1,4 +1,3 @@
-from calendar import month
 from flask import Flask, render_template, request
 import pandas as pd
 import nltk
@@ -9,28 +8,25 @@ import sqlite3
 import utils
 from nltk.tokenize import word_tokenize
 import nltk
-import en_core_web_sm
 import locationtagger
-from statistics import mean
-import geopy
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
 from textblob import TextBlob
 from nltk.corpus import words
-import openai
+#import openai
 import os
+from huggingface_hub import InferenceClient
 
-
-nltk.download('maxent_ne_chunker')
   
 nltk.download('words')
 correct_words = words.words()
   
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+nltk.download('punkt_tab')
+nltk.download('averaged_perceptron_tagger_eng')
+nltk.download('maxent_ne_chunker_tab')
 load_dotenv()
 
-openai.api_key = os.getenv('open_ai_api_key')
+client = InferenceClient(api_key=os.getenv('huggin_api'))
+
+#openai.api_key = os.getenv('open_ai_api_key')
 
 app = Flask(__name__)
 
@@ -57,7 +53,7 @@ def main():
     x=path.split('.')[-1]
     global filename_for_database
     filename_for_database='db/'+filename.replace(x,'db') #changing global value of filename_for_database
-
+    print(filename_for_database)
     #reading filedata start
     if x=='xlsx':
         new_wb = load_workbook(path)
@@ -200,39 +196,19 @@ def insights():
             else:
                 reviews['Positive']=reviews['Positive']+1
         resp=''
-        if product == 'All-New Fire HD 8 Kids Edition Tablet, 8 HD Display, 32 GB, Blue Kid-Proof Case':
-          resp='''<ol>
-                <li style="color: red;"><strong>Performance:</strong> While the Amazon Fire HD 8 Kids Edition offers good visuals, users note that its navigation is sluggish compared to competitors like Apple and Samsung. Consider optimizing the device's software for smoother performance.</li>
-                <li style="color: red;"><strong>Touchscreen Responsiveness:</strong> The touchscreen lacks responsiveness. Amazon should enhance touchscreen technology for better user interaction.</li>
-                <li style="color: red;"><strong>Camera Quality:</strong> Many reviews mention the camera is subpar. Improving the camera could make the device more appealing.</li>
-                <li style="color: green;"><strong>Value for Cost:</strong> At a low price point, it provides decent features. Highlight the affordability in marketing, but emphasize that it's not for those seeking high-end performance.</li>
-                <li style="color: green;"><strong>Durability:</strong> The protective case is appreciated, with many users noting its robustness. Ensure the product continues to include durable cases for kids.</li>
-                <li style="color: green;"><strong>Battery Life:</strong> Users commend the long battery life. Maintain or improve this feature to meet customer expectations.</li>
-                <li style="color: green;"><strong>Parental Controls:</strong> The ability to set limits and track usage is well-received. Enhance these features to provide even more control for parents.</li>
-                <li style="color: red;"><strong>Content Variety:</strong> There are concerns about limited content in the kid-friendly environment. Expanding the library of apps and educational resources would enhance user satisfaction.</li>
-                <li style="color: green;"><strong>Ease of Use:</strong> Users find the interface user-friendly for children. Keep the design simple and intuitive.</li>
-                <li style="color: red;"><strong>Google Play Integration:</strong> The need for Google Play services is noted. Simplifying the process to access a wider range of apps would improve functionality.</li>
-                <li style="color: red;"><strong>Screen Brightness:</strong> Users suggest that screen brightness could be improved. Consider upgrading the display for better visibility.</li>
-                <li style="color: green;"><strong>Repair and Warranty:</strong> The two-year worry-free warranty is a major selling point. Ensure this is prominently featured in marketing materials.</li>
-            </ol>
-            '''
-        elif product =='AmazonBasics Ventilated Adjustable Laptop Stand':
-          resp='''<ol>
-                <li style="color: green;"><strong>Ergonomic Design:</strong> Users appreciate the adjustable angles for comfortable typing. Continue to emphasize this feature as a key selling point.</li>
-                <li style="color: green;"><strong>Cooling Efficiency:</strong> The mesh design effectively keeps laptops cool, reducing fan noise. Maintain or improve the ventilation design to enhance performance.</li>
-                <li style="color: green;"><strong>Stability and Durability:</strong> The metal construction is praised for being sturdy yet lightweight. Ensure the materials used are of high quality to sustain long-term use.</li>
-                <li style="color: red;"><strong>Tabs for Laptop Security:</strong> Several users find the tabs that prevent laptops from sliding off to be inadequate, suggesting they need to be taller. Consider redesigning these tabs for better security.</li>
-                <li style="color: green;"><strong>Cord Management:</strong> The built-in cord keeper is well-received. Keep this feature as it contributes to a clean and organized workspace.</li>
-                <li style="color: red;"><strong>Comfort Issues:</strong> Some users report discomfort from the rivets on the surface. Explore design adjustments to make the resting area more comfortable for prolonged use.</li>
-                <li style="color: red;"><strong>Size Compatibility:</strong> While it fits most laptops well, some users mentioned needing it for larger models. Consider offering a larger version to accommodate 17-inch laptops.</li>
-                <li style="color: red;"><strong>Lap Comfort:</strong> Users note discomfort when using the stand on their laps due to the metal surface. Consider adding padding or an alternative material for better lap comfort.</li>
-                <li style="color: green;"><strong>Simple Design:</strong> The straightforward design is appreciated for its ease of use. Continue to focus on simplicity while enhancing functionality.</li>
-                <li style="color: green;"><strong>Value for Money:</strong> Many users feel they received excellent value for the price. Highlight this in marketing to attract budget-conscious customers.</li>
-                <li style="color: red;"><strong>Potential for Improvements:</strong> Suggestions for features like adjustable tabs or raised surfaces indicate a demand for further innovation. Conduct market research to explore these possibilities.</li>
-                <li style="color: green;"><strong>Overall Satisfaction:</strong> Users express high satisfaction with their purchase. Gather and promote testimonials to reinforce positive feedback.</li>
-            </ol>
-            '''
-        print(product)
+        print(f"These are some of the reviews of my product {[i for i in data]}")
+        for message in client.chat_completion(
+            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages=[{"role": "user", "content": f"These are some of the reviews of my product {[i for i in data]}"},
+                {"role": "assistant", "content": f"I have noted that"},
+                {"role": "user", "content": "Can you give positives, negatives and actionable feedback based on the reviews given before, give response with html tags like listing<ol><li> and breaks like <br>"}],
+            max_tokens=1000,
+            stream=True,
+        ):
+            print(message.choices[0].delta.content, end="")
+            msg = message.choices[0].delta.content
+            resp = resp+ msg.replace('/n','<br>')
+
         return { 'review':reviews ,'product':product, 'insights': resp}
 
     #For structured dataset OrderStatuses are listed:
